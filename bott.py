@@ -140,7 +140,7 @@ async def generate_pass(interaction: discord.Interaction):
     # Role + ID layer
     role_layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
     role_draw = ImageDraw.Draw(role_layer)
-    role_position = (470, 560)
+    role_position = (485, 560)
     role_draw.text(role_position, role_text, fill=(0, 0, 0, 255), font=font_role)
     role_layer = role_layer.rotate(ROLE_TEXT_ANGLE, resample=Image.BICUBIC, expand=False)
     base = Image.alpha_composite(base, role_layer)
