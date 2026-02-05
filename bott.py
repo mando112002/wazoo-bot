@@ -5,6 +5,8 @@ import requests
 from io import BytesIO
 import json
 import os
+import csv
+import urllib.parse
 
 # ================== CONFIG ==================
 
@@ -13,6 +15,7 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 BASE_IMAGE_PATH = "base.jpg"
 OUTPUT_DIR = "generated"
 DATA_FILE = "data.json"
+SUBMISSIONS_FILE = "submissions.json"
 
 ROLE_PRIORITY = [
     ("Legendary Monster", "Treasury"),
@@ -37,12 +40,15 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ================== STORAGE ==================
 
-if not os.path.exists(OUTPUT_DIR):
-    os.makedirs(OUTPUT_DIR)
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 if not os.path.exists(DATA_FILE):
     with open(DATA_FILE, "w") as f:
         json.dump({"last_id": 0, "used_users": []}, f)
+
+if not os.path.exists(SUBMISSIONS_FILE):
+    with open(SUBMISSIONS_FILE, "w") as f:
+        json.dump([], f)
 
 def load_data():
     with open(DATA_FILE, "r") as f:
@@ -51,6 +57,14 @@ def load_data():
 def save_data(data):
     with open(DATA_FILE, "w") as f:
         json.dump(data, f, indent=4)
+
+def load_submissions():
+    with open(SUBMISSIONS_FILE, "r") as f:
+        return json.load(f)
+
+def save_submissions(items):
+    with open(SUBMISSIONS_FILE, "w") as f:
+        json.dump(items, f, indent=4)
 
 def get_user_role(member: discord.Member):
     role_names = [role.name for role in member.roles]
@@ -76,7 +90,7 @@ async def generate_pass(interaction: discord.Interaction):
 
     if user_id in data["used_users"]:
         await interaction.followup.send("You already generated your pass.", ephemeral=True)
-        return
+        return None
 
     data["last_id"] += 1
     new_id = data["last_id"]
@@ -107,7 +121,7 @@ async def generate_pass(interaction: discord.Interaction):
     avatar_position = (250, 428)
     base.paste(avatar_img, avatar_position, avatar_img)
 
-    # ===== LOAD FONTS (from project folder) =====
+    # ===== LOAD FONTS =====
     try:
         font_role = ImageFont.truetype("Cinzel-VariableFont_wght.ttf", 28)   # Role + ID
         font_name = ImageFont.truetype("Allura-Regular.ttf", 44)             # Signature name
@@ -121,7 +135,7 @@ async def generate_pass(interaction: discord.Interaction):
     # ===== Role + ID layer =====
     role_layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
     role_draw = ImageDraw.Draw(role_layer)
-    role_position = (480, 560)
+    role_position = (470, 560)
     role_draw.text(role_position, role_text, fill=(0, 0, 0, 255), font=font_role)
     role_layer = role_layer.rotate(ROLE_TEXT_ANGLE, resample=Image.BICUBIC, expand=False)
     base = Image.alpha_composite(base, role_layer)
@@ -137,41 +151,187 @@ async def generate_pass(interaction: discord.Interaction):
     output_path = os.path.join(OUTPUT_DIR, f"pass_{new_id}.png")
     base.save(output_path)
 
-    caption = (
-        f"Just generated my Wazoo Pass 🎟️\n"
-        f"Role: {role_name}\n"
-        f"ID: #{new_id}\n\n"
+    return {
+        "pass_id": new_id,
+        "role": role_name,
+        "username": username,
+        "image_path": output_path
+    }
+
+def build_twitter_text(pass_id: int, role: str):
+    text = (
+        f"Just generated my Wazoo Pass ID: #{pass_id} 🎟️\n"
+        f"Role: {role}\n\n"
         f"Join the gang 👀🔥\n"
-        f"https://discord.com/invite/wazoogang"
+        f"DC : https://discord.com/invite/wazoogang\n"
+        f"X : https://x.com/WazooGangg"
     )
+    return text
 
-    await interaction.followup.send(
-        content=caption,
-        file=discord.File(output_path),
-        ephemeral=True
-    )
+def twitter_intent_url(text: str):
+    return "https://x.com/intent/tweet?text=" + urllib.parse.quote(text)
 
-# ================== BUTTON VIEW ==================
+# ================== USER STATE (in-memory) ==================
 
-class GenerateView(discord.ui.View):
+# temp_state[user_id] = { pass_id, role, image_path, twitter_link(optional) }
+temp_state = {}
+
+# ================== VIEWS & MODALS ==================
+
+class GenerateFlowView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Generate Pass", style=discord.ButtonStyle.primary, custom_id="generate_pass_btn")
-    async def generate_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="Generate", style=discord.ButtonStyle.primary, custom_id="btn_generate")
+    async def generate_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
-        await generate_pass(interaction)
 
-# ================== SLASH COMMAND: /post ==================
+        result = await generate_pass(interaction)
+        if result is None:
+            return
 
-@bot.tree.command(name="post", description="Post the Generate Pass button")
+        # store state
+        temp_state[str(interaction.user.id)] = {
+            "pass_id": result["pass_id"],
+            "role": result["role"],
+            "image_path": result["image_path"]
+        }
+
+        caption = build_twitter_text(result["pass_id"], result["role"])
+
+        await interaction.followup.send(
+            content=caption,
+            file=discord.File(result["image_path"]),
+            view=PostView(),
+            ephemeral=True
+        )
+
+class PostView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Post", style=discord.ButtonStyle.success, custom_id="btn_post")
+    async def post_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        uid = str(interaction.user.id)
+        if uid not in temp_state:
+            await interaction.response.send_message("Please generate first.", ephemeral=True)
+            return
+
+        state = temp_state[uid]
+        text = build_twitter_text(state["pass_id"], state["role"])
+        url = twitter_intent_url(text)
+
+        await interaction.response.send_message(
+            f"Click to post on X:\n{url}\n\nAfter posting, click **Post Link**.",
+            view=PostLinkView(),
+            ephemeral=True
+        )
+
+class PostLinkView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Post Link", style=discord.ButtonStyle.secondary, custom_id="btn_post_link")
+    async def post_link_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(PostLinkModal())
+
+class SubmitView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Submit", style=discord.ButtonStyle.primary, custom_id="btn_submit")
+    async def submit_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(WalletModal())
+
+class PostLinkModal(discord.ui.Modal, title="Submit Twitter Post Link"):
+    link = discord.ui.TextInput(label="Twitter/X Post Link", placeholder="https://x.com/...", required=True)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        uid = str(interaction.user.id)
+        if uid not in temp_state:
+            await interaction.response.send_message("Please generate first.", ephemeral=True)
+            return
+
+        temp_state[uid]["twitter_link"] = str(self.link)
+
+        await interaction.response.send_message(
+            "Link saved. Now click **Submit** and enter your wallet.",
+            view=SubmitView(),
+            ephemeral=True
+        )
+
+class WalletModal(discord.ui.Modal, title="Submit Wallet (EVM)"):
+    wallet = discord.ui.TextInput(label="Wallet Address (0x...)", placeholder="0x...", required=True, min_length=6)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        uid = str(interaction.user.id)
+        if uid not in temp_state:
+            await interaction.response.send_message("Please generate first.", ephemeral=True)
+            return
+
+        wallet_addr = str(self.wallet).strip()
+        if not wallet_addr.lower().startswith("0x"):
+            await interaction.response.send_message("Invalid wallet. Must start with 0x", ephemeral=True)
+            return
+
+        state = temp_state[uid]
+        twitter_link = state.get("twitter_link")
+        if not twitter_link:
+            await interaction.response.send_message("Please submit your Twitter post link first.", ephemeral=True)
+            return
+
+        # Save to submissions.json
+        submissions = load_submissions()
+        submissions.append({
+            "user_id": uid,
+            "username": interaction.user.name,
+            "role": state["role"],
+            "pass_id": state["pass_id"],
+            "twitter_link": twitter_link,
+            "wallet": wallet_addr
+        })
+        save_submissions(submissions)
+
+        # Clear temp state
+        del temp_state[uid]
+
+        await interaction.response.send_message("Submitted successfully! ✅", ephemeral=True)
+
+# ================== SLASH COMMANDS ==================
+
+@bot.tree.command(name="post", description="Post the Generate button (Admin only)")
 @discord.app_commands.checks.has_permissions(administrator=True)
-async def post(interaction: discord.Interaction):
-    view = GenerateView()
-    await interaction.response.send_message("Click the button to generate your pass:", view=view)
+async def post_cmd(interaction: discord.Interaction):
+    await interaction.response.send_message(
+        "Click **Generate** to start:",
+        view=GenerateFlowView()
+    )
 
-@post.error
-async def post_error(interaction: discord.Interaction, error):
+@post_cmd.error
+async def post_cmd_error(interaction: discord.Interaction, error):
+    if isinstance(error, discord.app_commands.errors.MissingPermissions):
+        await interaction.response.send_message("You need Administrator permission to use this command.", ephemeral=True)
+
+@bot.tree.command(name="export", description="Export submissions as CSV (Admin only)")
+@discord.app_commands.checks.has_permissions(administrator=True)
+async def export_cmd(interaction: discord.Interaction):
+    submissions = load_submissions()
+
+    csv_path = "submissions.csv"
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=["user_id", "username", "role", "pass_id", "twitter_link", "wallet"])
+        writer.writeheader()
+        for row in submissions:
+            writer.writerow(row)
+
+    await interaction.response.send_message(
+        "Here is the exported CSV:",
+        file=discord.File(csv_path),
+        ephemeral=True
+    )
+
+@export_cmd.error
+async def export_cmd_error(interaction: discord.Interaction, error):
     if isinstance(error, discord.app_commands.errors.MissingPermissions):
         await interaction.response.send_message("You need Administrator permission to use this command.", ephemeral=True)
 
