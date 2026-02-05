@@ -18,12 +18,12 @@ DATA_FILE = "data.json"
 SUBMISSIONS_FILE = "submissions.json"
 
 ROLE_PRIORITY = [
-    ("Legendary Monster", "Treasury"),
-    ("Real Fugz", "Treasury"),
-    ("OG Gang", "OG"),
-    ("Real Fugger", "OG"),
-    ("FCFS Gang", "WL"),
-    ("Fugz Holder", "WL"),
+    (1456126489232805979, "Treasury"),  # Legendary Monster
+    (1460434358740713759, "Treasury"),  # Real Fugz
+    (1456116784511062171, "OG"),        # OG Gang
+    (1460434602572124314, "OG"),        # Real Fugger
+    (1456118390358806696, "WL"),        # FCFS Gang
+    (1460083695951282383, "WL"),        # Fugz Holder
 ]
 
 # Angles
