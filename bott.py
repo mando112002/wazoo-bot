@@ -290,10 +290,14 @@ class WalletModal(discord.ui.Modal, title="Submit Wallet (EVM)"):
 @bot.tree.command(name="post", description="Post the Generate button (Admin only)")
 @discord.app_commands.checks.has_permissions(administrator=True)
 async def post_cmd(interaction: discord.Interaction):
+    view = GenerateFlowView()
+
     await interaction.response.send_message(
-        "Click **Generate** to start:",
-        view=GenerateFlowView()
+        content="**Generate your Pass and submit your wallet**",
+        file=discord.File(generate_banner.jpg),
+        view=view
     )
+
 
 @bot.tree.command(name="export", description="Export submissions as CSV (Admin only)")
 @discord.app_commands.checks.has_permissions(administrator=True)
