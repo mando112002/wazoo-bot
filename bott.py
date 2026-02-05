@@ -67,9 +67,9 @@ def save_submissions(items):
         json.dump(items, f, indent=4)
 
 def get_user_role(member: discord.Member):
-    role_names = [role.name for role in member.roles]
-    for discord_role, display_role in ROLE_PRIORITY:
-        if discord_role in role_names:
+    role_ids = [role.id for role in member.roles]
+    for discord_role_id, display_role in ROLE_PRIORITY:
+        if discord_role_id in role_ids:
             return display_role
     return "Member"
 
