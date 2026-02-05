@@ -169,7 +169,7 @@ def build_twitter_text(pass_id: int, role: str):
         f"Role: {role}\n\n"
         f"Join the gang 👀🔥\n"
         f"DC : https://discord.com/invite/wazoogang\n"
-        f"X : https://x.com/WazooGangg"
+        f"X : @WazooGangg"
     )
 
 def twitter_intent_url(text: str):
