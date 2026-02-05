@@ -109,7 +109,7 @@ async def generate_pass(interaction: discord.Interaction):
 
     # ===== LOAD FONTS (from project folder) =====
     try:
-        font_role = ImageFont.truetype("Cinzel-VariableFont_wght.ttf", 32)   # Role + ID
+        font_role = ImageFont.truetype("Cinzel-VariableFont_wght.ttf", 28)   # Role + ID
         font_name = ImageFont.truetype("Allura-Regular.ttf", 44)             # Signature name
     except Exception as e:
         print("Font load failed, using default font:", e)
@@ -129,7 +129,7 @@ async def generate_pass(interaction: discord.Interaction):
     # ===== Username (Signature) layer =====
     name_layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
     name_draw = ImageDraw.Draw(name_layer)
-    name_position = (380, 635)
+    name_position = (350, 635)
     name_draw.text(name_position, username, fill=(0, 0, 0, 255), font=font_name)
     name_layer = name_layer.rotate(NAME_TEXT_ANGLE, resample=Image.BICUBIC, expand=False)
     base = Image.alpha_composite(base, name_layer)
@@ -142,7 +142,7 @@ async def generate_pass(interaction: discord.Interaction):
         f"Role: {role_name}\n"
         f"ID: #{new_id}\n\n"
         f"Join the gang 👀🔥\n"
-        f"https://yourlinkhere"
+        f"https://discord.com/invite/wazoogang"
     )
 
     await interaction.followup.send(
