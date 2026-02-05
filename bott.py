@@ -294,7 +294,7 @@ async def post_cmd(interaction: discord.Interaction):
 
     await interaction.response.send_message(
         content="**Generate your Pass and submit your wallet**",
-        file=discord.File(generate_banner.jpg),
+        file=discord.File("generate_banner.jpg"),
         view=view
     )
 
