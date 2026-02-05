@@ -8,7 +8,7 @@ import os
 
 # ================== CONFIG ==================
 
-TOKEN = os.getenv("DISCORD_TOKEN")  # Or use: os.getenv("DISCORD_TOKEN")
+TOKEN = os.getenv("DISCORD_TOKEN")
 
 BASE_IMAGE_PATH = "base.jpg"
 OUTPUT_DIR = "generated"
@@ -107,32 +107,30 @@ async def generate_pass(interaction: discord.Interaction):
     avatar_position = (250, 428)
     base.paste(avatar_img, avatar_position, avatar_img)
 
+    # ===== LOAD FONTS (from project folder) =====
     try:
-        font_big = ImageFont.truetype("timesbd.ttf", 38)
-        font_small = ImageFont.truetype("timesbd.ttf", 30)
-    except:
-        try:
-            font_big = ImageFont.truetype("DejaVuSerif-Bold.ttf", 38)
-            font_small = ImageFont.truetype("DejaVuSerif-Bold.ttf", 30)
-        except:
-            font_big = ImageFont.load_default()
-            font_small = ImageFont.load_default()
+        font_role = ImageFont.truetype("Cinzel-VariableFont_wght.ttf", 32)   # Role + ID
+        font_name = ImageFont.truetype("Allura-Regular.ttf", 44)             # Signature name
+    except Exception as e:
+        print("Font load failed, using default font:", e)
+        font_role = ImageFont.load_default()
+        font_name = ImageFont.load_default()
 
     role_text = f"{role_name} | ID: #{new_id}"
 
-    # Role + ID layer
+    # ===== Role + ID layer =====
     role_layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
     role_draw = ImageDraw.Draw(role_layer)
     role_position = (480, 560)
-    role_draw.text(role_position, role_text, fill=(0, 0, 0, 255), font=font_small)
+    role_draw.text(role_position, role_text, fill=(0, 0, 0, 255), font=font_role)
     role_layer = role_layer.rotate(ROLE_TEXT_ANGLE, resample=Image.BICUBIC, expand=False)
     base = Image.alpha_composite(base, role_layer)
 
-    # Username layer
+    # ===== Username (Signature) layer =====
     name_layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
     name_draw = ImageDraw.Draw(name_layer)
     name_position = (380, 635)
-    name_draw.text(name_position, username, fill=(0, 0, 0, 255), font=font_big)
+    name_draw.text(name_position, username, fill=(0, 0, 0, 255), font=font_name)
     name_layer = name_layer.rotate(NAME_TEXT_ANGLE, resample=Image.BICUBIC, expand=False)
     base = Image.alpha_composite(base, name_layer)
 
